@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unsafe"
 
 	"golang.org/x/sys/windows/registry"
 	"golang.org/x/sys/windows/svc"
@@ -20,6 +21,18 @@ import (
 )
 
 const version = "windows-service"
+
+// WindowsSessionNotification Windows Session change notification
+// https://docs.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-tagwtssession_notification
+type WindowsSessionNotification struct {
+	Size      uint32
+	SessionID uint32
+}
+
+// WindowsInterface represents windows specific callbacks
+type WindowsInterface interface {
+	SessionChange(s Service, c svc.ChangeRequest, wsn *WindowsSessionNotification)
+}
 
 type windowsService struct {
 	i Interface
@@ -161,7 +174,7 @@ func (ws *windowsService) getError() error {
 }
 
 func (ws *windowsService) Execute(args []string, r <-chan svc.ChangeRequest, changes chan<- svc.Status) (bool, uint32) {
-	const cmdsAccepted = svc.AcceptStop | svc.AcceptShutdown
+	const cmdsAccepted = svc.AcceptStop | svc.AcceptShutdown | svc.AcceptSessionChange
 	changes <- svc.Status{State: svc.StartPending}
 
 	if err := ws.i.Start(ws); err != nil {
@@ -183,6 +196,14 @@ loop:
 				return true, 2
 			}
 			break loop
+		case svc.SessionChange:
+			var sd *WindowsSessionNotification
+			sd = (*WindowsSessionNotification)(unsafe.Pointer(c.EventData))
+			if wsi, ok := (ws.i).(interface {
+				SessionChange(s Service, c svc.ChangeRequest, wsn *WindowsSessionNotification)
+			}); ok {
+				wsi.SessionChange(ws, c, sd)
+			}
 		default:
 			continue loop
 		}
