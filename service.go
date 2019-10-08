@@ -59,7 +59,7 @@
 //			logger.Error(err)
 //		}
 //	}
-package service // import "github.com/neio-idaptive/service"
+package service // import "github.com/idaptive/service"
 
 import (
 	"errors"
