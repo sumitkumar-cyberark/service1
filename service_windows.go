@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 	"unsafe"
 
@@ -21,6 +22,8 @@ import (
 )
 
 const version = "windows-service"
+
+const ERROR_SERVICE_DOES_NOT_EXIST = 1060
 
 // WindowsSessionNotification Windows Session change notification
 // https://docs.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-tagwtssession_notification
@@ -312,8 +315,10 @@ func (ws *windowsService) Status() (Status, error) {
 
 	s, err := m.OpenService(ws.Name)
 	if err != nil {
-		if err.Error() == "The specified service does not exist as an installed service." {
-			return StatusUnknown, ErrNotInstalled
+		if syserr, ok := err.(syscall.Errno); ok {
+			if syserr == ERROR_SERVICE_DOES_NOT_EXIST {
+				return StatusUnknown, ErrNotInstalled
+			}
 		}
 		return StatusUnknown, err
 	}
